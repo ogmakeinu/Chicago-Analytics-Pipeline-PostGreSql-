@@ -1,0 +1,35 @@
+services:
+  db:
+    image: postgis/postgis:16-3.4   # Postgres + PostGIS bundled (
+    restart: always
+    environment:
+      POSTGRES_DB: ${DB_NAME:-chicago_data}
+      POSTGRES_USER: ${DB_USER:-main}     # Use your macOS username or change to postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-}  # Can be empty for local dev
+    ports:
+      - "5433:5432"   # Maps container 5432 → host 5433 (avoids clashing with  local Postgres)
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-main}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  etl:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db               # 'db' is the service name → resolves inside Docker network
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-chicago_data}
+      DB_USER: ${DB_USER:-main}
+      DB_PASSWORD: ${DB_PASSWORD:-}
+    volumes:
+      - .:/app                  # Mounts your local code so changes are live
+    command: ["python", "scripts/ingest_chicago.py"]
+
+volumes:
+  postgres_data:
